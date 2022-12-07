@@ -4,7 +4,7 @@ import { RedirectItem } from './types';
 export default defineEndpoint((router, { services }) => {
 	const { ItemsService } = services;
 
-	const useRegex = async (redirectsService, path: string, page: number): Promise<RedirectItem[] | undefined> => {
+	const findMatchingRegexRedirects = async (redirectsService, path: string, page: number): Promise<RedirectItem[] | undefined> => {
 		const redirectsWithRegex: RedirectItem[] = await redirectsService.readByQuery({
 			fields: ['*'],
 			filter: { regex: { _eq: true }},
@@ -18,7 +18,7 @@ export default defineEndpoint((router, { services }) => {
 					return regex.test(path);
 				});
 
-			return match.length ? match : useRegex(redirectsService, path, page+1);
+			return match.length ? match : findMatchingRegexRedirects(redirectsService, path, page+1);
 		}
 	}
 
@@ -32,7 +32,7 @@ export default defineEndpoint((router, { services }) => {
 			}
 		);
 
-		const match = await redirectsService.readByQuery({
+		const exactMatches = await redirectsService.readByQuery({
 			fields: ['*'],
 			filter: {
 				regex: { _eq: false },
@@ -40,11 +40,11 @@ export default defineEndpoint((router, { services }) => {
 			},
 		});
 
-		if (match.length) {
-			res.send(match[0]?.to);
+		if (exactMatches.length) {
+			res.send(exactMatches[0]?.to);
 		} else {
-			const matches: RedirectItem[] | undefined = await useRegex(redirectsService, req.query.path, 0);
-			matches ? res.send(matches[0]?.to) : res.send(undefined);
+			const regexMatches: RedirectItem[] | undefined = await findMatchingRegexRedirects(redirectsService, req.query.path, 0);
+			regexMatches ? res.send(regexMatches[0]?.to) : res.send(undefined);
 		}
 	});
 });
