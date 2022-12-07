@@ -4,6 +4,24 @@ import { RedirectItem } from './types';
 export default defineEndpoint((router, { services }) => {
 	const {ItemsService} = services;
 
+	const useRegex = async (redirectsService, path: string, page: number): Promise<RedirectItem[] | undefined> => {
+		const redirectsWithRegex: RedirectItem[] = await redirectsService.readByQuery({
+			fields: ['*'],
+			filter: { regex: { _eq: true }},
+			page: page,
+		});
+
+		if (redirectsWithRegex.length){
+			const match: RedirectItem[] =
+				redirectsWithRegex.filter((redirectItem) => {
+					const regex: RegExp = new RegExp(redirectItem.from);
+					return regex.test(path);
+				});
+
+			return match.length ? match : useRegex(redirectsService, path, page+1);
+		}
+	}
+
 	router.get('/find', async (req, res) => {
 
 		const redirectsService = new ItemsService(
@@ -22,18 +40,8 @@ export default defineEndpoint((router, { services }) => {
 		if (match.length) {
 			res.send(match[0]?.to);
 		} else {
-			const redirectsWithRegex: RedirectItem[] = await redirectsService.readByQuery({
-				fields: ['*'],
-				filter: {regex: {_eq: true}}
-			});
-
-			const response: RedirectItem[] =
-				redirectsWithRegex.filter((redirectItem) => {
-					const regex: RegExp = new RegExp(redirectItem.from);
-					return redirectItem.regex ? regex.test(req.query.path) : redirectItem.from === req.query.path;
-				});
-
-			res.send(response[0]?.to);
+			const matches: RedirectItem[] | undefined = await useRegex(redirectsService, req.query.path, 0);
+			matches ? res.send(matches[0]?.to): res.send(undefined);
 		}
 	});
 });
